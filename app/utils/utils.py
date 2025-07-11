@@ -1,7 +1,10 @@
+import json
 import unittest
+from datetime import datetime
 from typing import Dict
 
 import duckdb
+import pandas as pd
 
 # duckdb(v1.3.2) 数值类型
 duckdb_numeric_types = {
@@ -127,6 +130,27 @@ def is_duckdb_time_type(column_type: str) -> bool:
         bool: True 如果是时间类型, False 否则
     """
     return column_type in duckdb_time_types
+
+
+class PandasJSONEncoder(json.JSONEncoder):
+    """自定义JSON编码器, 处理Pandas数据类型"""
+
+    def default(self, obj):
+        if pd.isna(obj):
+            return None
+        elif isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, pd.Timedelta):
+            return str(obj)
+        elif isinstance(obj, pd.Series):
+            return obj.tolist()
+        elif isinstance(obj, pd.DataFrame):
+            return obj.to_dict(orient="records")
+        elif isinstance(obj, (datetime, pd.Timestamp)):
+            return obj.isoformat()
+        elif hasattr(obj, "dtype"):
+            return str(obj)
+        return super().default(obj)
 
 
 class TestGetColumnTypeMap(unittest.TestCase):

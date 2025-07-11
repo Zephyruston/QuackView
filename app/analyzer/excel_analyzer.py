@@ -13,24 +13,37 @@ class AnalysisType(Enum):
     """分析操作类型枚举"""
 
     # 数值字段分析
-    AVG = "avg"
-    MAX = "max"
-    MIN = "min"
-    SUM = "sum"
-    VAR_POP = "var_pop"
-    STDDEV_POP = "stddev_pop"
-    COUNT = "count"
+    AVG = "avg"  # 平均值
+    MAX = "max"  # 最大值
+    MIN = "min"  # 最小值
+    SUM = "sum"  # 总和
+    VAR_POP = "var_pop"  # 总体方差
+    STDDEV_POP = "stddev_pop"  # 总体标准差
+    COUNT = "count"  # 计数
+    MEDIAN = "median"  # 中位数
+    QUARTILES = "quartiles"  # 四分位数
+    PERCENTILES = "percentiles"  # 百分位数
 
     # 字符串字段分析
-    DISTINCT_COUNT = "distinct_count"
-    TOP_K = "top_k"
-    VALUE_DISTRIBUTION = "value_distribution"
+    DISTINCT_COUNT = "distinct_count"  # 唯一值计数
+    TOP_K = "top_k"  # 前K个最常见值
+    VALUE_DISTRIBUTION = "value_distribution"  # 值分布
+    LENGTH_ANALYSIS = "length_analysis"  # 字符串长度分析
+    PATTERN_ANALYSIS = "pattern_analysis"  # 模式分析
 
     # 时间字段分析
-    DATE_RANGE = "date_range"
-    YEAR_ANALYSIS = "year_analysis"
-    MONTH_ANALYSIS = "month_analysis"
-    DAY_ANALYSIS = "day_analysis"
+    DATE_RANGE = "date_range"  # 日期范围
+    YEAR_ANALYSIS = "year_analysis"  # 年度分析
+    MONTH_ANALYSIS = "month_analysis"  # 月度分析
+    DAY_ANALYSIS = "day_analysis"  # 日分析
+    HOUR_ANALYSIS = "hour_analysis"  # 小时分析
+    WEEKDAY_ANALYSIS = "weekday_analysis"  # 星期分析
+    SEASONAL_ANALYSIS = "seasonal_analysis"  # 季节性分析
+
+    # 通用分析
+    MISSING_VALUES = "missing_values"  # 缺失值分析
+    DATA_QUALITY = "data_quality"  # 数据质量检查
+    CORRELATION = "correlation"  # 相关性分析
 
 
 class ExcelAnalyzer:
@@ -53,21 +66,99 @@ class ExcelAnalyzer:
         self.mode = mode
 
         self.analysis_rules = {
-            "INTEGER": ["sum", "avg", "max", "min", "count"],
-            "BIGINT": ["sum", "avg", "max", "min", "count"],
-            "DOUBLE": ["sum", "avg", "max", "min", "count"],
-            "FLOAT": ["sum", "avg", "max", "min", "count"],
-            "REAL": ["sum", "avg", "max", "min", "count"],
-            "DECIMAL": ["sum", "avg", "max", "min", "count"],
-            "VARCHAR": ["count", "distinct_count", "top_k", "value_distribution"],
-            "TEXT": ["count", "distinct_count", "top_k", "value_distribution"],
-            "STRING": ["count", "distinct_count", "top_k", "value_distribution"],
+            "INTEGER": [
+                "sum",
+                "avg",
+                "max",
+                "min",
+                "count",
+                "median",
+                "quartiles",
+                "percentiles",
+            ],
+            "BIGINT": [
+                "sum",
+                "avg",
+                "max",
+                "min",
+                "count",
+                "median",
+                "quartiles",
+                "percentiles",
+            ],
+            "DOUBLE": [
+                "sum",
+                "avg",
+                "max",
+                "min",
+                "count",
+                "median",
+                "quartiles",
+                "percentiles",
+            ],
+            "FLOAT": [
+                "sum",
+                "avg",
+                "max",
+                "min",
+                "count",
+                "median",
+                "quartiles",
+                "percentiles",
+            ],
+            "REAL": [
+                "sum",
+                "avg",
+                "max",
+                "min",
+                "count",
+                "median",
+                "quartiles",
+                "percentiles",
+            ],
+            "DECIMAL": [
+                "sum",
+                "avg",
+                "max",
+                "min",
+                "count",
+                "median",
+                "quartiles",
+                "percentiles",
+            ],
+            "VARCHAR": [
+                "count",
+                "distinct_count",
+                "top_k",
+                "value_distribution",
+                "length_analysis",
+                "pattern_analysis",
+            ],
+            "TEXT": [
+                "count",
+                "distinct_count",
+                "top_k",
+                "value_distribution",
+                "length_analysis",
+                "pattern_analysis",
+            ],
+            "STRING": [
+                "count",
+                "distinct_count",
+                "top_k",
+                "value_distribution",
+                "length_analysis",
+                "pattern_analysis",
+            ],
             "TIMESTAMP": [
                 "count",
                 "date_range",
                 "year_analysis",
                 "month_analysis",
                 "day_analysis",
+                "hour_analysis",
+                "weekday_analysis",
+                "seasonal_analysis",
             ],
             "TIMESTAMP_NS": [
                 "count",
@@ -75,6 +166,9 @@ class ExcelAnalyzer:
                 "year_analysis",
                 "month_analysis",
                 "day_analysis",
+                "hour_analysis",
+                "weekday_analysis",
+                "seasonal_analysis",
             ],
         }
 
@@ -290,16 +384,35 @@ class ExcelAnalyzer:
             分析类型的描述字符串
         """
         descriptions = {
-            "AVG": "计算平均值",
-            "MAX": "获取最大值",
-            "MIN": "获取最小值",
-            "SUM": "计算总和",
-            "COUNT": "计算记录数",
-            "DISTINCT": "统计唯一值",
-            "TOP-K": "获取前K个值",
-            "HISTOGRAM": "生成直方图",
-            "TIME_RANGE": "时间范围分析",
-            "GROUP_BY_TIME": "按时间分组",
+            # 数值分析
+            "avg": "计算平均值",
+            "max": "获取最大值",
+            "min": "获取最小值",
+            "sum": "计算总和",
+            "count": "计算记录数",
+            "var_pop": "计算总体方差",
+            "stddev_pop": "计算总体标准差",
+            "median": "计算中位数",
+            "quartiles": "计算四分位数",
+            "percentiles": "计算百分位数",
+            # 字符串分析
+            "distinct_count": "统计唯一值数量",
+            "top_k": "获取前K个最常见值",
+            "value_distribution": "分析值分布",
+            "length_analysis": "分析字符串长度",
+            "pattern_analysis": "模式识别分析",
+            # 时间分析
+            "date_range": "计算日期范围",
+            "year_analysis": "按年度分析",
+            "month_analysis": "按月度分析",
+            "day_analysis": "按日期分析",
+            "hour_analysis": "按小时分析",
+            "weekday_analysis": "按星期分析",
+            "seasonal_analysis": "季节性分析",
+            # 通用分析
+            "missing_values": "缺失值分析",
+            "data_quality": "数据质量检查",
+            "correlation": "相关性分析",
         }
         return descriptions.get(analysis_type, f"{analysis_type}分析")
 
