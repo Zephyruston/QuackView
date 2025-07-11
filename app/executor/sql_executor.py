@@ -95,6 +95,7 @@ class SQLExecutor:
         where_conditions: Optional[Dict[str, Union[str, Tuple, List]]] = None,
         limit: Optional[int] = None,
         top_k: Optional[int] = 10,
+        second_column: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         执行分析查询
@@ -107,6 +108,7 @@ class SQLExecutor:
             where_conditions: WHERE条件字典
             limit: 限制结果数量
             top_k: TOP-K分析时的K值
+            second_column: 第二个列名（用于相关性分析）
 
         Returns:
             分析结果字典
@@ -133,6 +135,7 @@ class SQLExecutor:
                 where_conditions=where_conditions,
                 limit=limit,
                 top_k=top_k,
+                second_column=second_column,
             )
 
             result = self.execute(sql)

@@ -132,6 +132,7 @@ class DBEngine:
         where_conditions: Optional[Dict[str, Union[str, Tuple, List]]] = None,
         limit: Optional[int] = None,
         top_k: Optional[int] = 10,
+        second_column: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         执行单字段分析
@@ -148,22 +149,36 @@ class DBEngine:
                 - "var_pop": 计算总体方差
                 - "stddev_pop": 计算总体标准差
                 - "count": 计算数量
+                - "median": 计算中位数
+                - "quartiles": 计算四分位数
+                - "percentiles": 计算百分位数
 
                 字符串分析:
                 - "distinct_count": 计算不同值数量
                 - "top_k": 获取出现次数最多的K个值 (默认: 10)
                 - "value_distribution": 计算值的分布
+                - "length_analysis": 字符串长度分析
+                - "pattern_analysis": 模式识别分析
 
                 时间分析:
                 - "date_range": 计算日期范围 (最小值/最大值)
                 - "year_analysis": 按年聚合
                 - "month_analysis": 按月聚合
                 - "day_analysis": 按天聚合
+                - "hour_analysis": 按小时聚合
+                - "weekday_analysis": 按星期聚合
+                - "seasonal_analysis": 季节性分析
+
+                通用分析:
+                - "missing_values": 缺失值分析
+                - "data_quality": 数据质量检查
+                - "correlation": 相关性分析 (需要second_column参数)
 
             group_by_columns: 分组字段列表
             where_conditions: WHERE条件字典
             limit: 限制结果数量
             top_k: TOP-K分析时的K值
+            second_column: 第二个列名（用于相关性分析）
 
         Returns:
             分析结果字典
@@ -184,6 +199,7 @@ class DBEngine:
             where_conditions=where_conditions,
             limit=limit,
             top_k=top_k,
+            second_column=second_column,
         )
 
     def execute_multi_column_analysis(

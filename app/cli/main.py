@@ -4,7 +4,6 @@ QuackView CLI - Excel数据分析工具
 
 import json
 import sys
-from datetime import datetime
 from typing import Dict, Optional
 
 import click
@@ -15,28 +14,7 @@ from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
 
 from ..query import create_memory_query_service
-
-
-class PandasJSONEncoder(json.JSONEncoder):
-    """自定义JSON编码器, 处理Pandas数据类型"""
-
-    def default(self, obj):
-        if pd.isna(obj):
-            return None
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        elif isinstance(obj, pd.Timedelta):
-            return str(obj)
-        elif isinstance(obj, pd.Series):
-            return obj.tolist()
-        elif isinstance(obj, pd.DataFrame):
-            return obj.to_dict(orient="records")
-        elif isinstance(obj, (datetime, pd.Timestamp)):
-            return obj.isoformat()
-        elif hasattr(obj, "dtype"):
-            return str(obj)
-        return super().default(obj)
-
+from ..utils.utils import PandasJSONEncoder
 
 console = Console()
 
@@ -305,67 +283,44 @@ def analyze(
         console.print("=" * 60)
 
         while True:
-            console.print("\n📋 请选择操作:", style="bold")
-            console.print("1. 📊 数值统计 (SUM/AVG/MAX/MIN/COUNT)")
-            console.print("2. 📈 分组计数分析")
-            console.print("3. 🔍 自定义过滤 (开发中)")
-            console.print("4. 📋 查看表结构")
-            console.print("5. 👀 查看样本数据")
-            console.print("6. 💻 执行自定义SQL")
+            console.print("\n📋 请选择分析类型:", style="bold")
+            console.print("1. 📊 数值统计分析 (适用于数值型列)")
+            console.print("2. 📝 文本数据分析 (适用于字符串型列)")
+            console.print("3. 📅 时间序列分析 (适用于时间型列)")
+            console.print("4. 🔍 数据质量检查")
+            console.print("5. 📈 相关性分析")
+            console.print("6. 📋 查看表结构")
+            console.print("7. 👀 查看样本数据")
+            console.print("8. 💻 执行自定义SQL")
             console.print("0. 🚪 退出")
 
             choice = Prompt.ask(
-                "请选择", choices=["0", "1", "2", "3", "4", "5", "6"], default="1"
+                "请选择",
+                choices=["0", "1", "2", "3", "4", "5", "6", "7", "8"],
+                default="1",
             )
 
             if choice == "0":
                 break
             elif choice == "1":
-                console.print("\n📊 数值统计分析", style="bold cyan")
-                console.print(
-                    "💡 适用于数值型列, 可计算总和、平均值、最大值、最小值、计数等",
-                    style="yellow",
-                )
-                options = get_analysis_options(service)
-                if options:
-                    result = service.execute_analysis(
-                        column_name=options["column_name"],
-                        analysis_type=options["analysis_type"],
-                    )
-                    display_analysis_result(result)
+                _handle_numeric_analysis(service)
             elif choice == "2":
-                console.print("\n📈 分组计数分析", style="bold cyan")
-                console.print("💡 按指定列分组并统计每组的数量", style="yellow")
-                column_types = service.get_column_types()
-                if column_types:
-                    console.print("\n📋 可用列:", style="bold")
-                    for i, col in enumerate(column_types.keys(), 1):
-                        console.print(f"  {i}. {col}", style="cyan")
-
-                    try:
-                        col_choice = IntPrompt.ask("请选择分组列", default=1)
-                        if 1 <= col_choice <= len(column_types):
-                            group_col = list(column_types.keys())[col_choice - 1]
-                            result = service.execute_analysis(
-                                column_name=group_col,
-                                analysis_type="count",
-                                group_by_columns=[group_col],
-                            )
-                            display_analysis_result(result)
-                    except ValueError:
-                        console.print("❌ 请输入有效数字", style="red")
+                _handle_text_analysis(service)
             elif choice == "3":
-                console.print("🔍 自定义过滤功能正在开发中...", style="yellow")
-                console.print("💡 敬请期待更多功能！", style="cyan")
+                _handle_time_analysis(service)
             elif choice == "4":
+                _handle_data_quality_check(service)
+            elif choice == "5":
+                _handle_correlation_analysis(service)
+            elif choice == "6":
                 console.print("\n📋 表结构信息", style="bold cyan")
                 display_table_info(table_info)
-            elif choice == "5":
+            elif choice == "7":
                 console.print("\n👀 样本数据预览", style="bold cyan")
                 limit = IntPrompt.ask("显示前几行数据?", default=10)
                 sample_data = service.get_sample_data(limit)
                 display_sample_data(sample_data, limit)
-            elif choice == "6":
+            elif choice == "8":
                 console.print("\n💻 自定义SQL查询", style="bold cyan")
                 console.print(
                     "💡 支持标准SQL语法, 表名默认为导入的表名", style="yellow"
@@ -384,6 +339,301 @@ def analyze(
         console.print(f"❌ 发生错误: {e}", style="red")
         console.print("💡 请检查文件路径和格式是否正确", style="yellow")
         sys.exit(1)
+
+
+def _handle_numeric_analysis(service):
+    """处理数值统计分析"""
+    console.print("\n📊 数值统计分析", style="bold cyan")
+    console.print("💡 适用于数值型列，提供基础统计和高级分析", style="yellow")
+
+    column_types = service.get_column_types()
+    numeric_columns = []
+
+    for col_name, col_type in column_types.items():
+        if col_type.upper() in [
+            "INTEGER",
+            "BIGINT",
+            "DOUBLE",
+            "FLOAT",
+            "REAL",
+            "DECIMAL",
+        ]:
+            numeric_columns.append(col_name)
+
+    if not numeric_columns:
+        console.print("❌ 没有找到数值型列", style="red")
+        return
+
+    console.print("\n📋 可用数值列:", style="bold")
+    for i, col in enumerate(numeric_columns, 1):
+        console.print(f"  {i}. {col} ({column_types[col]})", style="cyan")
+
+    try:
+        col_choice = IntPrompt.ask("请选择要分析的列", default=1)
+        if 1 <= col_choice <= len(numeric_columns):
+            selected_col = numeric_columns[col_choice - 1]
+
+            console.print("\n📊 请选择分析操作:", style="bold")
+            console.print("1. 📈 基础统计 (平均值、最大值、最小值、总和)")
+            console.print("2. 📊 分布分析 (中位数、四分位数、百分位数)")
+            console.print("3. 📉 变异分析 (方差、标准差、变异系数)")
+            console.print("4. 🔍 异常值检测")
+            console.print("5. 📋 缺失值分析")
+            console.print("0. 🔙 返回主菜单")
+
+            analysis_choice = Prompt.ask(
+                "请选择", choices=["0", "1", "2", "3", "4", "5"], default="1"
+            )
+
+            if analysis_choice == "0":
+                return
+            elif analysis_choice == "1":
+                result = service.execute_analysis(selected_col, "avg")
+                display_analysis_result(result)
+                result = service.execute_analysis(selected_col, "max")
+                display_analysis_result(result)
+                result = service.execute_analysis(selected_col, "min")
+                display_analysis_result(result)
+                result = service.execute_analysis(selected_col, "sum")
+                display_analysis_result(result)
+            elif analysis_choice == "2":
+                result = service.execute_analysis(selected_col, "median")
+                display_analysis_result(result)
+                result = service.execute_analysis(selected_col, "quartiles")
+                display_analysis_result(result)
+                result = service.execute_analysis(selected_col, "percentiles")
+                display_analysis_result(result)
+            elif analysis_choice == "3":
+                result = service.execute_analysis(selected_col, "var_pop")
+                display_analysis_result(result)
+                result = service.execute_analysis(selected_col, "stddev_pop")
+                display_analysis_result(result)
+            elif analysis_choice == "4":
+                result = service.execute_analysis(selected_col, "quartiles")
+                display_analysis_result(result)
+            elif analysis_choice == "5":
+                result = service.execute_analysis(selected_col, "missing_values")
+                display_analysis_result(result)
+        else:
+            console.print("❌ 无效选择", style="red")
+    except ValueError:
+        console.print("❌ 请输入有效数字", style="red")
+
+
+def _handle_text_analysis(service):
+    """处理文本数据分析"""
+    console.print("\n📝 文本数据分析", style="bold cyan")
+    console.print("💡 适用于字符串型列，提供文本特征分析", style="yellow")
+
+    column_types = service.get_column_types()
+    text_columns = []
+
+    for col_name, col_type in column_types.items():
+        if col_type.upper() in ["VARCHAR", "TEXT", "STRING"]:
+            text_columns.append(col_name)
+
+    if not text_columns:
+        console.print("❌ 没有找到文本型列", style="red")
+        return
+
+    console.print("\n📋 可用文本列:", style="bold")
+    for i, col in enumerate(text_columns, 1):
+        console.print(f"  {i}. {col} ({column_types[col]})", style="cyan")
+
+    try:
+        col_choice = IntPrompt.ask("请选择要分析的列", default=1)
+        if 1 <= col_choice <= len(text_columns):
+            selected_col = text_columns[col_choice - 1]
+
+            console.print("\n📝 请选择分析操作:", style="bold")
+            console.print("1. 🔢 唯一值统计")
+            console.print("2. 🏆 Top-K 分析")
+            console.print("3. 📊 值分布分析")
+            console.print("4. 📏 字符串长度分析")
+            console.print("5. 🔍 模式识别")
+            console.print("0. 🔙 返回主菜单")
+
+            analysis_choice = Prompt.ask(
+                "请选择", choices=["0", "1", "2", "3", "4", "5"], default="1"
+            )
+
+            if analysis_choice == "0":
+                return
+            elif analysis_choice == "1":
+                result = service.execute_analysis(selected_col, "distinct_count")
+                display_analysis_result(result)
+            elif analysis_choice == "2":
+                k_value = IntPrompt.ask("请输入K值", default=10)
+                result = service.execute_analysis(selected_col, "top_k", top_k=k_value)
+                display_analysis_result(result)
+            elif analysis_choice == "3":
+                result = service.execute_analysis(selected_col, "value_distribution")
+                display_analysis_result(result)
+            elif analysis_choice == "4":
+                result = service.execute_analysis(selected_col, "length_analysis")
+                display_analysis_result(result)
+            elif analysis_choice == "5":
+                result = service.execute_analysis(selected_col, "pattern_analysis")
+                display_analysis_result(result)
+        else:
+            console.print("❌ 无效选择", style="red")
+    except ValueError:
+        console.print("❌ 请输入有效数字", style="red")
+
+
+def _handle_time_analysis(service):
+    """处理时间序列分析"""
+    console.print("\n📅 时间序列分析", style="bold cyan")
+    console.print("💡 适用于时间型列，提供时间维度分析", style="yellow")
+
+    column_types = service.get_column_types()
+    time_columns = []
+
+    for col_name, col_type in column_types.items():
+        if col_type.upper() in ["TIMESTAMP", "TIMESTAMP_NS", "DATE", "TIME"]:
+            time_columns.append(col_name)
+
+    if not time_columns:
+        console.print("❌ 没有找到时间型列", style="red")
+        return
+
+    console.print("\n📋 可用时间列:", style="bold")
+    for i, col in enumerate(time_columns, 1):
+        console.print(f"  {i}. {col} ({column_types[col]})", style="cyan")
+
+    try:
+        col_choice = IntPrompt.ask("请选择要分析的列", default=1)
+        if 1 <= col_choice <= len(time_columns):
+            selected_col = time_columns[col_choice - 1]
+
+            console.print("\n📅 请选择分析操作:", style="bold")
+            console.print("1. 📅 时间范围分析")
+            console.print("2. 📊 年度分析")
+            console.print("3. 📊 月度分析")
+            console.print("4. 📊 日期分析")
+            console.print("5. 📊 小时分析")
+            console.print("6. 📊 星期分析")
+            console.print("7. 🌸 季节性分析")
+            console.print("0. 🔙 返回主菜单")
+
+            analysis_choice = Prompt.ask(
+                "请选择", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="1"
+            )
+
+            if analysis_choice == "0":
+                return
+            elif analysis_choice == "1":
+                result = service.execute_analysis(selected_col, "date_range")
+                display_analysis_result(result)
+            elif analysis_choice == "2":
+                result = service.execute_analysis(selected_col, "year_analysis")
+                display_analysis_result(result)
+            elif analysis_choice == "3":
+                result = service.execute_analysis(selected_col, "month_analysis")
+                display_analysis_result(result)
+            elif analysis_choice == "4":
+                result = service.execute_analysis(selected_col, "day_analysis")
+                display_analysis_result(result)
+            elif analysis_choice == "5":
+                result = service.execute_analysis(selected_col, "hour_analysis")
+                display_analysis_result(result)
+            elif analysis_choice == "6":
+                result = service.execute_analysis(selected_col, "weekday_analysis")
+                display_analysis_result(result)
+            elif analysis_choice == "7":
+                result = service.execute_analysis(selected_col, "seasonal_analysis")
+                display_analysis_result(result)
+        else:
+            console.print("❌ 无效选择", style="red")
+    except ValueError:
+        console.print("❌ 请输入有效数字", style="red")
+
+
+def _handle_data_quality_check(service):
+    """处理数据质量检查"""
+    console.print("\n🔍 数据质量检查", style="bold cyan")
+    console.print("💡 检查数据完整性、一致性和质量", style="yellow")
+
+    column_types = service.get_column_types()
+
+    console.print("\n📋 请选择要检查的列:", style="bold")
+    for i, (col_name, col_type) in enumerate(column_types.items(), 1):
+        console.print(f"  {i}. {col_name} ({col_type})", style="cyan")
+
+    try:
+        col_choice = IntPrompt.ask("请选择要检查的列", default=1)
+        if 1 <= col_choice <= len(column_types):
+            selected_col = list(column_types.keys())[col_choice - 1]
+
+            console.print("\n🔍 请选择检查类型:", style="bold")
+            console.print("1. 📊 缺失值分析")
+            console.print("2. 📊 数据质量统计")
+            console.print("0. 🔙 返回主菜单")
+
+            analysis_choice = Prompt.ask("请选择", choices=["0", "1", "2"], default="1")
+
+            if analysis_choice == "0":
+                return
+            elif analysis_choice == "1":
+                result = service.execute_analysis(selected_col, "missing_values")
+                display_analysis_result(result)
+            elif analysis_choice == "2":
+                result = service.execute_analysis(selected_col, "data_quality")
+                display_analysis_result(result)
+        else:
+            console.print("❌ 无效选择", style="red")
+    except ValueError:
+        console.print("❌ 请输入有效数字", style="red")
+
+
+def _handle_correlation_analysis(service):
+    """处理相关性分析"""
+    console.print("\n📈 相关性分析", style="bold cyan")
+    console.print("💡 分析数值列之间的相关性", style="yellow")
+
+    column_types = service.get_column_types()
+    numeric_columns = []
+
+    for col_name, col_type in column_types.items():
+        if col_type.upper() in [
+            "INTEGER",
+            "BIGINT",
+            "DOUBLE",
+            "FLOAT",
+            "REAL",
+            "DECIMAL",
+        ]:
+            numeric_columns.append(col_name)
+
+    if len(numeric_columns) < 2:
+        console.print("❌ 需要至少两个数值型列进行相关性分析", style="red")
+        return
+
+    console.print("\n📋 可用数值列:", style="bold")
+    for i, col in enumerate(numeric_columns, 1):
+        console.print(f"  {i}. {col} ({column_types[col]})", style="cyan")
+
+    try:
+        col1_choice = IntPrompt.ask("请选择第一个列", default=1)
+        col2_choice = IntPrompt.ask("请选择第二个列", default=2)
+
+        if (
+            1 <= col1_choice <= len(numeric_columns)
+            and 1 <= col2_choice <= len(numeric_columns)
+            and col1_choice != col2_choice
+        ):
+
+            col1 = numeric_columns[col1_choice - 1]
+            col2 = numeric_columns[col2_choice - 1]
+
+            console.print(f"\n📈 分析 {col1} 和 {col2} 的相关性", style="bold")
+
+            result = service.execute_analysis(col1, "correlation", second_column=col2)
+            display_analysis_result(result)
+        else:
+            console.print("❌ 无效选择或选择了相同的列", style="red")
+    except ValueError:
+        console.print("❌ 请输入有效数字", style="red")
 
 
 @cli.command()
