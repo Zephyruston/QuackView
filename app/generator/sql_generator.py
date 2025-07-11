@@ -263,12 +263,13 @@ class SQLGenerator:
                 AnalysisType.MONTH_ANALYSIS,
                 AnalysisType.DAY_ANALYSIS,
                 AnalysisType.HOUR_ANALYSIS,
-                AnalysisType.WEEKDAY_ANALYSIS,
             ]:
                 extract_part = analysis_type.value.replace("_analysis", "")
                 group_by_clause = (
                     f"GROUP BY EXTRACT({extract_part.upper()} FROM {column_name})"
                 )
+            elif analysis_type == AnalysisType.WEEKDAY_ANALYSIS:
+                group_by_clause = f"GROUP BY EXTRACT(DOW FROM {column_name})"
             else:
                 group_by_clause = f"GROUP BY {column_name}"
         elif group_by_columns:

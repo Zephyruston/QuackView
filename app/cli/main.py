@@ -14,7 +14,7 @@ from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
 
 from ..query import create_memory_query_service
-from ..utils.utils import PandasJSONEncoder
+from ..utils.utils import PandasJSONEncoder, is_duckdb_numeric_type, is_duckdb_text_type, is_duckdb_time_type
 
 console = Console()
 
@@ -350,14 +350,7 @@ def _handle_numeric_analysis(service):
     numeric_columns = []
 
     for col_name, col_type in column_types.items():
-        if col_type.upper() in [
-            "INTEGER",
-            "BIGINT",
-            "DOUBLE",
-            "FLOAT",
-            "REAL",
-            "DECIMAL",
-        ]:
+        if is_duckdb_numeric_type(col_type):
             numeric_columns.append(col_name)
 
     if not numeric_columns:
@@ -429,7 +422,7 @@ def _handle_text_analysis(service):
     text_columns = []
 
     for col_name, col_type in column_types.items():
-        if col_type.upper() in ["VARCHAR", "TEXT", "STRING"]:
+        if is_duckdb_text_type(col_type):
             text_columns.append(col_name)
 
     if not text_columns:
@@ -490,7 +483,7 @@ def _handle_time_analysis(service):
     time_columns = []
 
     for col_name, col_type in column_types.items():
-        if col_type.upper() in ["TIMESTAMP", "TIMESTAMP_NS", "DATE", "TIME"]:
+        if is_duckdb_time_type(col_type):
             time_columns.append(col_name)
 
     if not time_columns:
@@ -595,14 +588,7 @@ def _handle_correlation_analysis(service):
     numeric_columns = []
 
     for col_name, col_type in column_types.items():
-        if col_type.upper() in [
-            "INTEGER",
-            "BIGINT",
-            "DOUBLE",
-            "FLOAT",
-            "REAL",
-            "DECIMAL",
-        ]:
+        if is_duckdb_numeric_type(col_type):
             numeric_columns.append(col_name)
 
     if len(numeric_columns) < 2:
