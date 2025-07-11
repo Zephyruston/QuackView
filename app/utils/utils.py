@@ -103,7 +103,9 @@ def is_duckdb_numeric_type(column_type: str) -> bool:
     返回:
         bool: True 如果是数值类型, False 否则
     """
-    return column_type in duckdb_numeric_types
+    # 处理带参数的数值类型, 如 decimal(10,2)
+    base_type = column_type.split("(")[0].lower()
+    return base_type in duckdb_numeric_types
 
 
 def is_duckdb_text_type(column_type: str) -> bool:
@@ -136,16 +138,16 @@ class PandasJSONEncoder(json.JSONEncoder):
     """自定义JSON编码器, 处理Pandas数据类型"""
 
     def default(self, obj):
-        if pd.isna(obj):
-            return None
+        if isinstance(obj, pd.Series):
+            return obj.tolist()
+        elif isinstance(obj, pd.DataFrame):
+            return obj.to_dict(orient="records")
         elif isinstance(obj, pd.Timestamp):
             return obj.isoformat()
         elif isinstance(obj, pd.Timedelta):
             return str(obj)
-        elif isinstance(obj, pd.Series):
-            return obj.tolist()
-        elif isinstance(obj, pd.DataFrame):
-            return obj.to_dict(orient="records")
+        elif pd.isna(obj):
+            return None
         elif isinstance(obj, (datetime, pd.Timestamp)):
             return obj.isoformat()
         elif hasattr(obj, "dtype"):
