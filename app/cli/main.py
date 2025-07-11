@@ -14,7 +14,12 @@ from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
 
 from ..query import create_memory_query_service
-from ..utils.utils import PandasJSONEncoder, is_duckdb_numeric_type, is_duckdb_text_type, is_duckdb_time_type
+from ..utils.utils import (
+    PandasJSONEncoder,
+    is_duckdb_numeric_type,
+    is_duckdb_text_type,
+    is_duckdb_time_type,
+)
 
 console = Console()
 

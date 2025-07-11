@@ -218,7 +218,16 @@ class SQLGenerator:
                 column_name, second_column, where_conditions
             )
 
-        select_clause = self._build_select_clause(column_name, analysis_type)
+        if group_by_columns:
+            base_select = self._build_select_clause(column_name, analysis_type)
+            group_by_select = ", ".join(group_by_columns)
+            if "SELECT" in base_select:
+                select_part = base_select.replace("SELECT ", "")
+                select_clause = f"SELECT {group_by_select}, {select_part}"
+            else:
+                select_clause = f"SELECT {group_by_select}, {base_select}"
+        else:
+            select_clause = self._build_select_clause(column_name, analysis_type)
 
         from_clause = f"FROM {self.table_name}"
 
@@ -433,7 +442,9 @@ class SQLGenerator:
         Returns:
             LIMIT子句
         """
-        if analysis_type == AnalysisType.TOP_K:
+        if limit is not None:
+            return f"LIMIT {limit}"
+        elif analysis_type == AnalysisType.TOP_K:
             return f"LIMIT {top_k}"
         elif analysis_type in [
             AnalysisType.VALUE_DISTRIBUTION,
@@ -441,8 +452,6 @@ class SQLGenerator:
             AnalysisType.PATTERN_ANALYSIS,
         ]:
             return f"LIMIT {top_k}"
-        elif limit:
-            return f"LIMIT {limit}"
         return ""
 
     def get_analysis_examples(self, column_name: str) -> List[Dict[str, str]]:
@@ -465,7 +474,7 @@ class SQLGenerator:
                     {
                         "type": analysis_type.value,
                         "description": self._get_analysis_description(analysis_type),
-                        "sql_example": sql,
+                        "sql": sql,
                     }
                 )
             except Exception as e:
@@ -515,7 +524,11 @@ def generate_multi_column_sql(
         select_clause = generator._build_select_clause(column_name, analysis_type)
         select_parts.append(select_clause.replace("SELECT ", ""))
 
-    select_clause = f"SELECT {', '.join(select_parts)}"
+    if group_by_columns:
+        group_by_select = ", ".join(group_by_columns)
+        select_clause = f"SELECT {group_by_select}, {', '.join(select_parts)}"
+    else:
+        select_clause = f"SELECT {', '.join(select_parts)}"
 
     from_clause = f"FROM {table_name}"
     where_clause = generator._build_where_clause(where_conditions)
