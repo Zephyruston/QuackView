@@ -6,7 +6,7 @@ import os
 
 import pandas as pd
 
-from app.query.query_service import (
+from app.query.engine import (
     create_memory_query_service,
     create_persistent_query_service,
 )
@@ -157,7 +157,7 @@ def example_excel_import():
 
 
 if __name__ == "__main__":
-    print("🚀 QuackView 重构后模块使用示例")
+    print("🚀 QuackView 使用示例")
     print("=" * 50)
 
     example_memory_mode()

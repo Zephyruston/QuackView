@@ -1,11 +1,11 @@
-from .query_service import (
-    QueryService,
+from .engine import (
+    DBEngine,
     create_memory_query_service,
     create_persistent_query_service,
 )
 
 __all__ = [
-    "QueryService",
+    "DBEngine",
     "create_memory_query_service",
     "create_persistent_query_service",
 ]
