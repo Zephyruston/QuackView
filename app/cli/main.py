@@ -8,6 +8,7 @@ from typing import Dict, Optional
 
 import click
 import pandas as pd
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import IntPrompt, Prompt
@@ -97,19 +98,107 @@ def display_sample_data(df: pd.DataFrame, limit: int = 5) -> None:
 
     display_df = df.head(limit)
 
-    table = Table(
-        title=f"📋 样本数据 (前{len(display_df)}行)",
-        show_header=True,
-        header_style="bold magenta",
-    )
-
+    column_widths = {}
     for col in display_df.columns:
-        table.add_column(str(col), style="cyan", no_wrap=True)
+        col_name_width = len(str(col))
+        data_widths = []
+        for val in display_df[col].head(limit):
+            str_val = str(val)
+            if len(str_val) > 30:
+                data_widths.append(30)
+            else:
+                data_widths.append(len(str_val))
 
-    for _, row in display_df.iterrows():
-        table.add_row(*[str(val) for val in row.values])
+        max_data_width = max(data_widths) if data_widths else 10
+        column_widths[col] = max(col_name_width, max_data_width, 12)
 
-    console.print(table)
+    total_width = sum(column_widths.values()) + len(column_widths) * 2
+    console_width = 150
+
+    if total_width > console_width:
+        avg_col_width = sum(column_widths.values()) / len(column_widths)
+        cols_per_row = max(1, int((console_width - 20) / (avg_col_width + 2)))
+
+        columns_list = list(display_df.columns)
+        column_groups = []
+        for i in range(0, len(columns_list), cols_per_row):
+            column_groups.append(columns_list[i : i + cols_per_row])
+
+        for group_idx, column_group in enumerate(column_groups):
+            group_df = display_df[column_group]
+
+            group_widths = {col: column_widths[col] for col in column_group}
+            group_total_width = sum(group_widths.values()) + len(group_widths) * 2
+
+            table = Table(
+                title=f"📋 样本数据 (前{len(display_df)}行) - 第{group_idx + 1}组",
+                show_header=True,
+                header_style="bold magenta",
+                width=min(group_total_width, console_width),
+                show_edge=True,
+                box=box.ROUNDED,
+            )
+
+            for col in column_group:
+                width = group_widths[col]
+                col_name = str(col)
+                if len(col_name) > width:
+                    col_name = col_name[: width - 3] + "..."
+
+                table.add_column(col_name, style="cyan", width=width, no_wrap=False)
+
+            for _, row in group_df.iterrows():
+                formatted_row = []
+                for col in column_group:
+                    val = row[col]
+                    str_val = str(val)
+
+                    max_width = group_widths[col]
+                    if len(str_val) > max_width:
+                        formatted_val = str_val[: max_width - 3] + "..."
+                    else:
+                        formatted_val = str_val
+                    formatted_row.append(formatted_val)
+
+                table.add_row(*formatted_row)
+
+            console.print(table)
+            if group_idx < len(column_groups) - 1:
+                console.print()
+    else:
+        table = Table(
+            title=f"📋 样本数据 (前{len(display_df)}行)",
+            show_header=True,
+            header_style="bold magenta",
+            width=min(total_width, console_width),
+            show_edge=True,
+            box=box.ROUNDED,
+        )
+
+        for col in display_df.columns:
+            width = column_widths.get(col, 15)
+            col_name = str(col)
+            if len(col_name) > width:
+                col_name = col_name[: width - 3] + "..."
+
+            table.add_column(col_name, style="cyan", width=width, no_wrap=False)
+
+        for _, row in display_df.iterrows():
+            formatted_row = []
+            for col in display_df.columns:
+                val = row[col]
+                str_val = str(val)
+
+                max_width = column_widths.get(col, 15)
+                if len(str_val) > max_width:
+                    formatted_val = str_val[: max_width - 3] + "..."
+                else:
+                    formatted_val = str_val
+                formatted_row.append(formatted_val)
+
+            table.add_row(*formatted_row)
+
+        console.print(table)
 
 
 def get_analysis_options(service) -> Dict:
@@ -169,17 +258,112 @@ def display_analysis_result(result: Dict) -> None:
     if result_data is not None:
         df = result_data
         if isinstance(df, pd.DataFrame) and not df.empty:
-            table = Table(
-                title="📊 分析结果", show_header=True, header_style="bold magenta"
-            )
-
+            column_widths = {}
             for col in df.columns:
-                table.add_column(str(col), style="cyan", no_wrap=True)
+                col_name_width = len(str(col))
 
-            for _, row in df.iterrows():
-                table.add_row(*[str(val) for val in row.values])
+                data_widths = []
+                for val in df[col].head(10):
+                    str_val = str(val)
+                    if len(str_val) > 30:
+                        data_widths.append(30)
+                    else:
+                        data_widths.append(len(str_val))
 
-            console.print(table)
+                max_data_width = max(data_widths) if data_widths else 10
+                column_widths[col] = max(col_name_width, max_data_width, 12)
+
+            total_width = sum(column_widths.values()) + len(column_widths) * 2
+            console_width = 150
+
+            if total_width > console_width:
+                avg_col_width = sum(column_widths.values()) / len(column_widths)
+                cols_per_row = max(1, int((console_width - 20) / (avg_col_width + 2)))
+
+                columns_list = list(df.columns)
+                column_groups = []
+                for i in range(0, len(columns_list), cols_per_row):
+                    column_groups.append(columns_list[i : i + cols_per_row])
+
+                for group_idx, column_group in enumerate(column_groups):
+                    group_df = df[column_group]
+
+                    group_widths = {col: column_widths[col] for col in column_group}
+                    group_total_width = (
+                        sum(group_widths.values()) + len(group_widths) * 2
+                    )
+
+                    table = Table(
+                        title=f"📊 分析结果 - 第{group_idx + 1}组",
+                        show_header=True,
+                        header_style="bold magenta",
+                        width=min(group_total_width, console_width),
+                        show_edge=True,
+                        box=box.ROUNDED,
+                    )
+
+                    for col in column_group:
+                        width = group_widths[col]
+                        col_name = str(col)
+                        if len(col_name) > width:
+                            col_name = col_name[: width - 3] + "..."
+
+                        table.add_column(
+                            col_name, style="cyan", width=width, no_wrap=False
+                        )
+
+                    for _, row in group_df.iterrows():
+                        formatted_row = []
+                        for col in column_group:
+                            val = row[col]
+                            str_val = str(val)
+
+                            max_width = group_widths[col]
+                            if len(str_val) > max_width:
+                                formatted_val = str_val[: max_width - 3] + "..."
+                            else:
+                                formatted_val = str_val
+                            formatted_row.append(formatted_val)
+
+                        table.add_row(*formatted_row)
+
+                    console.print(table)
+                    if group_idx < len(column_groups) - 1:
+                        console.print()
+            else:
+                table = Table(
+                    title="📊 分析结果",
+                    show_header=True,
+                    header_style="bold magenta",
+                    width=min(total_width, console_width),
+                    show_edge=True,
+                    box=box.ROUNDED,
+                )
+
+                for col in df.columns:
+                    width = column_widths.get(col, 15)
+                    col_name = str(col)
+                    if len(col_name) > width:
+                        col_name = col_name[: width - 3] + "..."
+
+                    table.add_column(col_name, style="cyan", width=width, no_wrap=False)
+
+                for _, row in df.iterrows():
+                    formatted_row = []
+                    for col in df.columns:
+                        val = row[col]
+                        str_val = str(val)
+
+                        max_width = column_widths.get(col, 15)
+                        if len(str_val) > max_width:
+                            formatted_val = str_val[: max_width - 3] + "..."
+                        else:
+                            formatted_val = str_val
+                        formatted_row.append(formatted_val)
+
+                    table.add_row(*formatted_row)
+
+                console.print(table)
         elif isinstance(df, pd.DataFrame) and df.empty:
             console.print("📭 没有返回数据", style="yellow")
         else:
