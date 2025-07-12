@@ -59,9 +59,9 @@ Content-Type: application/json
   "task_id": "{{task_id}}",
   "sql": "SELECT * FROM non_existent_table"
 }
-HTTP 404
+HTTP 422
 [Asserts]
-jsonpath "$.detail" contains "SQL执行错误"
+jsonpath "$.detail" contains "SQL execution failed"
 
 # Test 5: Try custom query with non-existent session
 POST http://localhost:8000/api/query/custom
@@ -72,7 +72,7 @@ Content-Type: application/json
 }
 HTTP 404
 [Asserts]
-jsonpath "$.detail" contains "not found"
+jsonpath "$.detail" contains "Session non-existent-task-id not found"
 
 # Cleanup: Close session
 DELETE http://localhost:8000/api/connection?task_id={{task_id}}
