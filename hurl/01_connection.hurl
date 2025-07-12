@@ -41,7 +41,7 @@ Hello World!
 ```
 HTTP 400
 [Asserts]
-jsonpath "$.detail" == "Only Excel files are supported"
+jsonpath "$.detail" == "Only Excel files (.xlsx, .xls) are supported"
 
 # Test 5: Close session
 DELETE http://localhost:8000/api/connection?task_id={{task_id}}
@@ -53,4 +53,4 @@ jsonpath "$.message" == "Session closed successfully"
 DELETE http://localhost:8000/api/connection?task_id=non-existent-task-id
 HTTP 404
 [Asserts]
-jsonpath "$.detail" == "Session not found" 
+jsonpath "$.detail" == "Session non-existent-task-id not found" 

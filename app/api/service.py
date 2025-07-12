@@ -8,6 +8,15 @@ from typing import Any, Dict, List, Optional
 
 from ..analyzer.excel_analyzer import ExcelAnalyzer
 from ..connector.excel_connector import AnalysisMode, ExcelConnector
+from .exceptions import (
+    AnalysisError,
+    DatabaseConnectionError,
+    ExcelProcessingError,
+    ExportError,
+    FileValidationError,
+    SessionNotFoundError,
+    SQLExecutionError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +34,20 @@ class QuackViewService:
         task_id = str(uuid.uuid4())
         logger.info(f"[Service] 创建新会话: {task_id}, 文件名: {filename}")
 
+        if not file_content or len(file_content) == 0:
+            raise FileValidationError("File content is empty", filename)
+
         clean_filename = Path(filename).name
         logger.info(f"[Service] 清洗后的文件名: {clean_filename}")
 
         file_path = self.temp_dir / f"{task_id}_{clean_filename}"
-        with open(file_path, "wb") as f:
-            f.write(file_content)
-        logger.info(f"[Service] 文件已保存到: {file_path}")
+        try:
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+            logger.info(f"[Service] 文件已保存到: {file_path}")
+        except Exception as e:
+            logger.error(f"[Service] 文件保存失败: {e}", exc_info=True)
+            raise FileValidationError(f"Failed to save file: {str(e)}", filename)
 
         connector = ExcelConnector(mode=AnalysisMode.MEMORY)
         analyzer = ExcelAnalyzer(mode=AnalysisMode.MEMORY)
@@ -44,7 +60,9 @@ class QuackViewService:
             )
         except Exception as e:
             logger.error(f"[Service] Excel导入失败: {e}", exc_info=True)
-            raise
+            raise ExcelProcessingError(
+                f"Failed to import Excel file: {str(e)}", filename
+            )
 
         try:
             schema_info = analyzer.import_and_analyze(str(file_path))
@@ -53,14 +71,16 @@ class QuackViewService:
             )
         except Exception as e:
             logger.error(f"[Service] 数据结构分析失败: {e}", exc_info=True)
-            raise
+            raise ExcelProcessingError(
+                f"Failed to analyze Excel structure: {str(e)}", filename
+            )
 
         try:
             con = connector.connect()
             logger.info(f"[Service] DuckDB连接获取成功")
         except Exception as e:
             logger.error(f"[Service] DuckDB连接获取失败: {e}", exc_info=True)
-            raise
+            raise DatabaseConnectionError(f"Failed to connect to database: {str(e)}")
 
         table_info = schema_info.get("table_info", {})
         table_name = table_info.get("table_name", "data")
@@ -86,7 +106,7 @@ class QuackViewService:
     def get_schema(self, task_id: str) -> Dict[str, Any]:
         """获取表结构信息"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
         schema_info = session["schema"]
@@ -104,7 +124,7 @@ class QuackViewService:
     def get_analysis_options(self, task_id: str) -> List[Dict[str, Any]]:
         """获取分析选项"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
         schema_info = session["schema"]
@@ -121,7 +141,7 @@ class QuackViewService:
     def get_session_info(self, task_id: str) -> Dict[str, Any]:
         """获取会话信息，包括表名"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
 
@@ -139,11 +159,14 @@ class QuackViewService:
     ) -> Dict[str, Any]:
         """执行分析任务"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
         con = session["connection"]
         table_name = session["table_name"]
+
+        if not operations:
+            raise AnalysisError("No analysis operations provided", task_id)
 
         select_parts = []
         for op in operations:
@@ -163,6 +186,8 @@ class QuackViewService:
                 select_parts.append(
                     f"COUNT(DISTINCT {column}) as distinct_count_{column}"
                 )
+            else:
+                raise AnalysisError(f"Unsupported operation: {operation}", task_id)
 
         sql = f"SELECT {', '.join(select_parts)} FROM {table_name}"
 
@@ -183,6 +208,8 @@ class QuackViewService:
                     where_conditions.append(f"{column} > {value}")
                 elif operator == "<":
                     where_conditions.append(f"{column} < {value}")
+                else:
+                    raise AnalysisError(f"Unsupported operator: {operator}", task_id)
 
             if where_conditions:
                 sql += f" WHERE {' AND '.join(where_conditions)}"
@@ -194,16 +221,19 @@ class QuackViewService:
 
             return {"columns": columns, "rows": rows, "sql_preview": sql}
         except Exception as e:
-            raise ValueError(f"SQL执行错误: {str(e)}")
+            raise SQLExecutionError(f"SQL execution failed: {str(e)}", sql)
 
     def execute_custom_query(self, task_id: str, sql: str) -> Dict[str, Any]:
         """执行自定义SQL查询"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
         con = session["connection"]
         table_name = session["table_name"]
+
+        if not sql or not sql.strip():
+            raise SQLExecutionError("SQL query is empty", sql)
 
         processed_sql = sql
         common_table_names = ["data", "DATA", "table", "TABLE", "main", "MAIN"]
@@ -241,15 +271,12 @@ class QuackViewService:
 
             return {"columns": columns, "rows": rows, "sql_preview": processed_sql}
         except Exception as e:
-            if "Session" in str(e) and "not found" in str(e):
-                raise ValueError(f"Session {task_id} not found")
-            else:
-                raise ValueError(f"SQL执行错误: {str(e)}")
+            raise SQLExecutionError(f"SQL execution failed: {str(e)}", processed_sql)
 
     def export_sql(self, task_id: str) -> str:
         """导出SQL脚本"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
         table_name = session["table_name"]
@@ -263,19 +290,31 @@ class QuackViewService:
     def export_excel(self, task_id: str) -> bytes:
         """导出Excel文件"""
         if task_id not in self.sessions:
-            raise ValueError(f"Session {task_id} not found")
+            raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
         con = session["connection"]
         table_name = session["table_name"]
 
-        df = con.execute(f"SELECT * FROM {table_name}").df()
+        try:
+            df = con.execute(f"SELECT * FROM {table_name}").df()
+        except Exception as e:
+            raise SQLExecutionError(
+                f"Failed to query data for export: {str(e)}",
+                f"SELECT * FROM {table_name}",
+            )
 
         output_path = self.temp_dir / f"export_{task_id}.xlsx"
-        df.to_excel(output_path, index=False)
+        try:
+            df.to_excel(output_path, index=False)
+        except Exception as e:
+            raise ExportError(f"Failed to export Excel file: {str(e)}", "excel")
 
-        with open(output_path, "rb") as f:
-            return f.read()
+        try:
+            with open(output_path, "rb") as f:
+                return f.read()
+        except Exception as e:
+            raise ExportError(f"Failed to read exported file: {str(e)}", "excel")
 
     def close_session(self, task_id: str) -> bool:
         """关闭会话"""
