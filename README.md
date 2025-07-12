@@ -32,6 +32,9 @@ uv sync
 ### 基本使用
 
 ```bash
+# 启动后端服务 port 8000
+uv run -m app.api.main
+
 # 交互式分析Excel文件
 qv analyze data.xlsx
 

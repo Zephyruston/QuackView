@@ -66,7 +66,8 @@ class ExcelConnector:
                 logger.info("已连接到内存数据库")
             else:
                 logger.info(f"已连接到数据库: {self.db_path}")
-
+        else:
+            logger.info("复用已存在的DuckDB连接")
         return self.conn
 
     def close(self):
@@ -112,19 +113,24 @@ class ExcelConnector:
             **pandas_kwargs: 传递给pandas.read_excel的参数
 
         Returns:
-            创建的表名
+            创建的表名(包含tbl_前缀)
         """
         if not os.path.exists(excel_path):
             raise FileNotFoundError(f"Excel文件不存在: {excel_path}")
 
         if table_name is None:
-            table_name = Path(excel_path).stem.lower()
-            table_name = "".join(c for c in table_name if c.isalnum() or c == "_")
+            base_name = Path(excel_path).stem.lower()
+            clean_name = "".join(c for c in base_name if c.isalnum())
+            if not clean_name:
+                clean_name = "data"
+            table_name = "tbl_" + clean_name
 
         logger.info(f"正在读取Excel文件: {excel_path}")
         try:
             df = pd.read_excel(excel_path, sheet_name=sheet_name, **pandas_kwargs)
+            logger.info(f"Excel文件读取成功, shape={df.shape}")
         except Exception as e:
+            logger.error(f"读取Excel文件失败: {e}", exc_info=True)
             raise ValueError(f"读取Excel文件失败: {e}")
 
         return self.import_dataframe(df, table_name)
@@ -138,18 +144,28 @@ class ExcelConnector:
             table_name: 表名
 
         Returns:
-            创建的表名
+            创建的表名(包含tbl_前缀)
         """
         conn = self.connect()
-        conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-        conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
-        self.current_table_name = table_name
-        row_count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-        column_count = len(df.columns)
+        logger.info(f"导入DataFrame到表: {table_name}, shape={df.shape}")
 
-        logger.info(f"成功导入DataFrame到表 '{table_name}'")
-        logger.info(f"数据行数: {row_count}, 列数: {column_count}")
+        if table_name and not table_name.startswith("tbl_"):
+            table_name = "tbl_" + table_name
+        elif not table_name:
+            table_name = "tbl_data"
 
+        try:
+            conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+            conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+            self.current_table_name = table_name
+            row_count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+            column_count = len(df.columns)
+            logger.info(
+                f"成功导入DataFrame到表 '{table_name}', 行数: {row_count}, 列数: {column_count}"
+            )
+        except Exception as e:
+            logger.error(f"导入DataFrame到表失败: {e}", exc_info=True)
+            raise
         return table_name
 
     def get_table_info(self, table_name: Optional[str] = None) -> Dict:

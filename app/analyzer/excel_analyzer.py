@@ -259,14 +259,30 @@ class ExcelAnalyzer:
         Returns:
             包含表信息和可用分析的字典
         """
-        table_name = self.connector.import_excel(
-            excel_path, table_name, sheet_name, **pandas_kwargs
-        )
-        self.current_table = table_name
+        logger.info(f"[Analyzer] 开始分析Excel: {excel_path}, table_name={table_name}")
+        try:
+            table_name = self.connector.import_excel(
+                excel_path, table_name, sheet_name, **pandas_kwargs
+            )
+            self.current_table = table_name
+            logger.info(f"[Analyzer] Excel导入并建表成功: {table_name}")
+        except Exception as e:
+            logger.error(f"[Analyzer] Excel导入或建表失败: {e}", exc_info=True)
+            raise
 
-        table_info = self.connector.get_table_info(table_name)
+        try:
+            table_info = self.connector.get_table_info(table_name)
+            logger.info(f"[Analyzer] 获取表信息成功: {table_info.get('table_name')}")
+        except Exception as e:
+            logger.error(f"[Analyzer] 获取表信息失败: {e}", exc_info=True)
+            raise
 
-        column_types = self.connector.get_column_types(table_name)
+        try:
+            column_types = self.connector.get_column_types(table_name)
+            logger.info(f"[Analyzer] 获取列类型成功: {column_types}")
+        except Exception as e:
+            logger.error(f"[Analyzer] 获取列类型失败: {e}", exc_info=True)
+            raise
 
         analysis_options = {}
         for column_name, column_type in column_types.items():
@@ -279,14 +295,22 @@ class ExcelAnalyzer:
                 for analysis_type in available_types
             ]
 
+        try:
+            sample_data = self.connector.get_sample_data(table_name).to_dict("records")
+            logger.info(f"[Analyzer] 获取样本数据成功, 行数: {len(sample_data)}")
+        except Exception as e:
+            logger.error(f"[Analyzer] 获取样本数据失败: {e}", exc_info=True)
+            sample_data = []
+
+        mode_info = self.get_mode_info()
+        logger.info(f"[Analyzer] 模式信息: {mode_info}")
+
         return {
             "table_info": table_info,
             "column_types": column_types,
             "analysis_options": analysis_options,
-            "sample_data": self.connector.get_sample_data(table_name).to_dict(
-                "records"
-            ),
-            "mode_info": self.get_mode_info(),
+            "sample_data": sample_data,
+            "mode_info": mode_info,
         }
 
     def import_dataframe_and_analyze(self, df: pd.DataFrame, table_name: str) -> Dict:
