@@ -37,6 +37,18 @@ HTTP 404
 [Asserts]
 jsonpath "$.detail" contains "not found"
 
+# Test 5: Export analysis result as Excel
+POST http://localhost:8000/api/export/result-excel
+Content-Type: application/json
+{
+  "columns": ["A", "B"],
+  "rows": [[1, 2], [3, 4]]
+}
+HTTP 200
+[Asserts]
+header "Content-Type" == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+header "Content-Disposition" contains "quackview_result_export.xlsx"
+
 # Cleanup: Close session
 DELETE http://localhost:8000/api/connection?task_id={{task_id}}
 HTTP 200 

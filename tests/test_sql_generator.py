@@ -67,6 +67,8 @@ class TestSQLGenerator(unittest.TestCase):
             AnalysisType.MEDIAN,
             AnalysisType.QUARTILES,
             AnalysisType.PERCENTILES,
+            AnalysisType.MISSING_VALUES,
+            AnalysisType.DATA_QUALITY,
         ]
         self.assertEqual(set(available_types), set(expected_types))
 
@@ -80,6 +82,8 @@ class TestSQLGenerator(unittest.TestCase):
             AnalysisType.VALUE_DISTRIBUTION,
             AnalysisType.LENGTH_ANALYSIS,
             AnalysisType.PATTERN_ANALYSIS,
+            AnalysisType.MISSING_VALUES,
+            AnalysisType.DATA_QUALITY,
         ]
         self.assertEqual(set(available_types), set(expected_types))
 
@@ -95,6 +99,8 @@ class TestSQLGenerator(unittest.TestCase):
             AnalysisType.HOUR_ANALYSIS,
             AnalysisType.WEEKDAY_ANALYSIS,
             AnalysisType.SEASONAL_ANALYSIS,
+            AnalysisType.MISSING_VALUES,
+            AnalysisType.DATA_QUALITY,
         ]
         self.assertEqual(set(available_types), set(expected_types))
 

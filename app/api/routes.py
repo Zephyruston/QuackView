@@ -1,7 +1,8 @@
 import io
 import logging
 
-from fastapi import APIRouter, File, Query, UploadFile
+import pandas as pd
+from fastapi import APIRouter, Body, File, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from .exceptions import FileValidationError, SessionNotFoundError
@@ -71,6 +72,11 @@ async def get_analysis_options(task_id: str = Query(...)):
 @router.post("/api/analyze", response_model=AnalysisResult)
 async def execute_analysis(request: AnalysisRequest):
     """执行分析任务"""
+    logger.info(f"[API] /api/analyze 收到分析请求: task_id={request.task_id}")
+    logger.info(
+        f"[API] 分析请求详情: operations={request.operations}, filters={request.filters}, group_by={request.group_by}, sort_by={request.sort_by}, limit={getattr(request, 'limit', None)}"
+    )
+
     operations = [
         {"column": op.column, "operation": op.operation} for op in request.operations
     ]
@@ -81,7 +87,16 @@ async def execute_analysis(request: AnalysisRequest):
             for f in request.filters
         ]
 
-    result = service.execute_analysis(request.task_id, operations, filters)
+    sort_by = None
+    if request.sort_by:
+        sort_by = [{"field": s.field, "order": s.order} for s in request.sort_by]
+
+    limit = getattr(request, "limit", None)
+
+    result = service.execute_analysis(
+        request.task_id, operations, filters, request.group_by, sort_by, limit
+    )
+    logger.info(f"[API] 分析执行完成，结果: {result}")
     return AnalysisResult(**result)
 
 
@@ -122,6 +137,25 @@ async def export_excel(task_id: str = Query(...)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f"attachment; filename=quackview_export_{task_id}.xlsx"
+        },
+    )
+
+
+@router.post("/api/export/result-excel")
+async def export_result_excel(
+    columns: list = Body(...),
+    rows: list = Body(...),
+):
+    """导出分析结果为Excel文件"""
+    df = pd.DataFrame(rows, columns=columns)
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": "attachment; filename=quackview_result_export.xlsx"
         },
     )
 

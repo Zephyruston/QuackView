@@ -23,6 +23,10 @@ export interface AnalysisFormFilter {
   value: string;
 }
 
+export interface AnalysisFormGroupBy {
+  field: string;
+}
+
 export interface AnalysisOption {
   name: string;
   description: string;

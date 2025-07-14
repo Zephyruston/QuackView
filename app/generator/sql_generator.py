@@ -46,6 +46,7 @@ class AnalysisType(Enum):
     MISSING_VALUES = "missing_values"  # 缺失值分析
     DATA_QUALITY = "data_quality"  # 数据质量检查
     CORRELATION = "correlation"  # 相关性分析
+    SELECT = "select"  # 原样字段选择
 
 
 class SQLGenerator:
@@ -78,6 +79,7 @@ class SQLGenerator:
         AnalysisType.MISSING_VALUES: "SELECT COUNT(*) as total_count, COUNT({column}) as non_null_count, COUNT(*) - COUNT({column}) as null_count",
         AnalysisType.DATA_QUALITY: "SELECT COUNT(*) as total_count, COUNT({column}) as non_null_count, COUNT(DISTINCT {column}) as distinct_count",
         AnalysisType.CORRELATION: "SELECT CORR({column}, {column}) as correlation",
+        AnalysisType.SELECT: "SELECT {column}",
     }
 
     # 分析类型描述映射
@@ -150,6 +152,8 @@ class SQLGenerator:
                     AnalysisType.MEDIAN,
                     AnalysisType.QUARTILES,
                     AnalysisType.PERCENTILES,
+                    AnalysisType.MISSING_VALUES,
+                    AnalysisType.DATA_QUALITY,
                 ]
             )
         elif is_duckdb_text_type(column_type):
@@ -161,6 +165,8 @@ class SQLGenerator:
                     AnalysisType.VALUE_DISTRIBUTION,
                     AnalysisType.LENGTH_ANALYSIS,
                     AnalysisType.PATTERN_ANALYSIS,
+                    AnalysisType.MISSING_VALUES,
+                    AnalysisType.DATA_QUALITY,
                 ]
             )
         elif is_duckdb_time_type(column_type):
@@ -174,6 +180,8 @@ class SQLGenerator:
                     AnalysisType.HOUR_ANALYSIS,
                     AnalysisType.WEEKDAY_ANALYSIS,
                     AnalysisType.SEASONAL_ANALYSIS,
+                    AnalysisType.MISSING_VALUES,
+                    AnalysisType.DATA_QUALITY,
                 ]
             )
         else:
@@ -197,6 +205,7 @@ class SQLGenerator:
         limit: Optional[int] = None,
         top_k: Optional[int] = 10,
         second_column: Optional[str] = None,
+        sort_by: Optional[List[Dict]] = None,
     ) -> str:
         """
         生成SQL语句
@@ -209,6 +218,7 @@ class SQLGenerator:
             limit: 限制结果数量
             top_k: TOP-K分析时的K值
             second_column: 第二个列名（用于相关性分析）
+            sort_by: 排序参数
 
         Returns:
             生成的SQL语句
@@ -284,7 +294,9 @@ class SQLGenerator:
         elif group_by_columns:
             group_by_clause = self._build_group_by_clause(group_by_columns)
 
-        order_by_clause = self._build_order_by_clause(column_name, analysis_type)
+        order_by_clause = self._build_custom_order_by_clause(
+            sort_by
+        ) or self._build_order_by_clause(column_name, analysis_type)
 
         limit_clause = self._build_limit_clause(limit, analysis_type, top_k)
 
@@ -369,9 +381,20 @@ class SQLGenerator:
             if isinstance(condition, tuple) and len(condition) == 2:
                 # 格式: ('>', 30) -> column > 30
                 op, val = condition
-                if isinstance(val, str):
-                    val = f"'{val}'"
-                conditions.append(f"{col} {op} {val}")
+
+                # 处理BETWEEN操作符
+                if op == "BETWEEN" and isinstance(val, (list, tuple)) and len(val) == 2:
+                    start_val, end_val = val
+                    if isinstance(start_val, str):
+                        start_val = f"'{start_val}'"
+                    if isinstance(end_val, str):
+                        end_val = f"'{end_val}'"
+                    conditions.append(f"{col} BETWEEN {start_val} AND {end_val}")
+                else:
+                    # 处理其他操作符
+                    if isinstance(val, str):
+                        val = f"'{val}'"
+                    conditions.append(f"{col} {op} {val}")
             elif isinstance(condition, str):
                 # 格式: '> 30' -> column > 30
                 conditions.append(f"{col} {condition}")
@@ -426,6 +449,22 @@ class SQLGenerator:
             AnalysisType.SEASONAL_ANALYSIS,
         ]:
             return f"ORDER BY count DESC"
+        return ""
+
+    def _build_custom_order_by_clause(self, sort_by: Optional[List[Dict]]) -> str:
+        """
+        根据sort_by参数生成ORDER BY子句
+        """
+        if not sort_by:
+            return ""
+        order_items = []
+        for item in sort_by:
+            field = item.get("field")
+            order = item.get("order", "ASC").upper()
+            if field:
+                order_items.append(f"{field} {order}")
+        if order_items:
+            return f"ORDER BY {', '.join(order_items)}"
         return ""
 
     def _build_limit_clause(

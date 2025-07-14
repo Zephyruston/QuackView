@@ -3,12 +3,7 @@ import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
 import { Alert } from "../components/Alert.tsx";
 import { apiClient } from "../utils/api-client.ts";
-import type {
-  AnalysisResult,
-  ColumnInfo,
-  Schema,
-  SessionInfo,
-} from "../types/analysis.ts";
+import type { AnalysisResult, Schema, SessionInfo } from "../types/analysis.ts";
 
 interface CustomQueryProps {
   taskId: string;
@@ -107,41 +102,45 @@ export default function CustomQuery(
         <Card title="自定义SQL查询">
           <div className="space-y-4">
             {sessionInfo.value && (
-              <div className="bg-gray-50 p-4 rounded-md">
-                <h4 className="font-medium text-gray-700 mb-2">可用表:</h4>
-                {sessionInfo.value.table_name
-                  ? (
-                    <ul className="list-disc list-inside text-gray-600">
+              <div className="bg-gray-50 p-4 rounded-md mb-4">
+                <div className="flex flex-col md:flex-row md:items-start md:space-x-8">
+                  <div className="mb-4 md:mb-0">
+                    <div className="font-semibold text-gray-700 mb-1">
+                      可用表：
+                    </div>
+                    <ul className="list-disc list-inside text-blue-700">
                       <li>{sessionInfo.value.table_name}</li>
                     </ul>
-                  )
-                  : <span className="text-gray-400">无</span>}
-                {schema.value?.columns && (
-                  <div className="bg-gray-50 p-4 rounded-md mt-2">
-                    <h4 className="font-medium text-gray-700 mb-2">
-                      可用字段:
-                    </h4>
-                    <ul className="list-disc list-inside text-gray-600 flex flex-wrap gap-4">
-                      {schema.value.columns.map((col: ColumnInfo) => (
-                        <li key={col.name}>
-                          {col.name}{" "}
-                          <span className="text-xs text-gray-400">
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-700 mb-1">
+                      可用字段：
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {schema.value?.columns.map((col) => (
+                        <span
+                          key={col.name}
+                          className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-mono border border-blue-200"
+                        >
+                          {col.name}
+                          <span className="ml-1 text-gray-400">
                             ({col.type})
                           </span>
-                        </li>
+                        </span>
                       ))}
-                    </ul>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
-            <div>
+            <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                SQL查询
+                <span className="mr-2">SQL查询</span>
+                <span className="text-xs text-gray-400">(支持多行)</span>
               </label>
               <textarea
-                className="w-full h-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-mono"
+                className="w-full h-40 rounded-lg border border-gray-300 bg-gray-100 shadow-inner focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-mono text-base p-3 transition"
                 value={sql.value}
                 onChange={(e) =>
                   sql.value = (e.target as HTMLTextAreaElement).value}
@@ -155,6 +154,7 @@ export default function CustomQuery(
                 variant="primary"
                 isLoading={isLoading.value}
                 disabled={isLoading.value || !sql.value.trim()}
+                className="w-full mt-2"
               >
                 执行查询
               </Button>

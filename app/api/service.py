@@ -127,16 +127,44 @@ class QuackViewService:
             raise SessionNotFoundError(task_id)
 
         session = self.sessions[task_id]
+        con = session["connection"]
+        table_name = session["table_name"]
         schema_info = session["schema"]
 
-        analysis_options = schema_info.get("analysis_options", {})
+        try:
+            from ..generator.sql_generator import SQLGenerator
 
-        options = []
-        for column_name, analyses in analysis_options.items():
-            operations = [analysis["type"].upper() for analysis in analyses]
-            options.append({"column": column_name, "operations": operations})
+            generator = SQLGenerator(con, table_name)
 
-        return options
+            options = []
+            table_info = schema_info.get("table_info", {})
+
+            for column_info in table_info.get("columns", []):
+                column_name = column_info["name"]
+                available_types = generator.get_available_analysis_types(column_name)
+
+                operations = [
+                    analysis_type.value.upper() for analysis_type in available_types
+                ]
+
+                options.append(
+                    {
+                        "column": column_name,
+                        "operations": operations,
+                        "type": column_info["type"],
+                    }
+                )
+
+            return options
+
+        except Exception as e:
+            logger.error(f"[Service] 获取分析选项失败: {str(e)}")
+            analysis_options = schema_info.get("analysis_options", {})
+            options = []
+            for column_name, analyses in analysis_options.items():
+                operations = [analysis["type"].upper() for analysis in analyses]
+                options.append({"column": column_name, "operations": operations})
+            return options
 
     def get_session_info(self, task_id: str) -> Dict[str, Any]:
         """获取会话信息，包括表名"""
@@ -155,9 +183,19 @@ class QuackViewService:
         }
 
     def execute_analysis(
-        self, task_id: str, operations: List[Dict], filters: Optional[List[Dict]] = None
+        self,
+        task_id: str,
+        operations: List[Dict],
+        filters: Optional[List[Dict]] = None,
+        group_by: Optional[List[str]] = None,
+        sort_by: Optional[List[Dict]] = None,
+        limit: Optional[int] = None,
     ) -> Dict[str, Any]:
         """执行分析任务"""
+        logger.info(
+            f"[Service] 开始执行分析: task_id={task_id}, operations={operations}, filters={filters}, group_by={group_by}, sort_by={sort_by}"
+        )
+
         if task_id not in self.sessions:
             raise SessionNotFoundError(task_id)
 
@@ -168,60 +206,167 @@ class QuackViewService:
         if not operations:
             raise AnalysisError("No analysis operations provided", task_id)
 
-        select_parts = []
-        for op in operations:
-            column = op["column"]
-            operation = op["operation"]
-            if operation == "SUM":
-                select_parts.append(f"SUM({column}) as sum_{column}")
-            elif operation == "AVG":
-                select_parts.append(f"AVG({column}) as avg_{column}")
-            elif operation == "MAX":
-                select_parts.append(f"MAX({column}) as max_{column}")
-            elif operation == "MIN":
-                select_parts.append(f"MIN({column}) as min_{column}")
-            elif operation == "COUNT":
-                select_parts.append(f"COUNT({column}) as count_{column}")
-            elif operation == "COUNT_DISTINCT":
-                select_parts.append(
-                    f"COUNT(DISTINCT {column}) as distinct_count_{column}"
+        try:
+            from ..generator.sql_generator import AnalysisType, SQLGenerator
+
+            generator = SQLGenerator(con, table_name)
+
+            converted_operations = []
+            for op in operations:
+                column = op["column"]
+                operation = op["operation"]
+
+                operation_mapping = {
+                    "SUM": AnalysisType.SUM,
+                    "AVG": AnalysisType.AVG,
+                    "MAX": AnalysisType.MAX,
+                    "MIN": AnalysisType.MIN,
+                    "COUNT": AnalysisType.COUNT,
+                    "COUNT_DISTINCT": AnalysisType.DISTINCT_COUNT,
+                    "VAR_POP": AnalysisType.VAR_POP,
+                    "STDDEV_POP": AnalysisType.STDDEV_POP,
+                    "MEDIAN": AnalysisType.MEDIAN,
+                    "QUARTILES": AnalysisType.QUARTILES,
+                    "PERCENTILES": AnalysisType.PERCENTILES,
+                    "TOP_K": AnalysisType.TOP_K,
+                    "VALUE_DISTRIBUTION": AnalysisType.VALUE_DISTRIBUTION,
+                    "LENGTH_ANALYSIS": AnalysisType.LENGTH_ANALYSIS,
+                    "PATTERN_ANALYSIS": AnalysisType.PATTERN_ANALYSIS,
+                    "DATE_RANGE": AnalysisType.DATE_RANGE,
+                    "YEAR_ANALYSIS": AnalysisType.YEAR_ANALYSIS,
+                    "MONTH_ANALYSIS": AnalysisType.MONTH_ANALYSIS,
+                    "DAY_ANALYSIS": AnalysisType.DAY_ANALYSIS,
+                    "HOUR_ANALYSIS": AnalysisType.HOUR_ANALYSIS,
+                    "WEEKDAY_ANALYSIS": AnalysisType.WEEKDAY_ANALYSIS,
+                    "SEASONAL_ANALYSIS": AnalysisType.SEASONAL_ANALYSIS,
+                    "MISSING_VALUES": AnalysisType.MISSING_VALUES,
+                    "DATA_QUALITY": AnalysisType.DATA_QUALITY,
+                    "CORRELATION": AnalysisType.CORRELATION,
+                    "SELECT": AnalysisType.SELECT,
+                }
+
+                if operation not in operation_mapping:
+                    raise AnalysisError(f"Unsupported operation: {operation}", task_id)
+
+                converted_operations.append(
+                    {"column": column, "analysis_type": operation_mapping[operation]}
+                )
+
+            where_conditions = None
+            if filters:
+                where_conditions = {}
+                for f in filters:
+                    column = f["column"]
+                    operator = f["operator"]
+                    value = f["value"]
+
+                    if operator == "=":
+                        where_conditions[column] = ("=", value)
+                    elif operator == "BETWEEN":
+                        where_conditions[column] = ("BETWEEN", value)
+                    elif operator == ">":
+                        where_conditions[column] = (">", value)
+                    elif operator == "<":
+                        where_conditions[column] = ("<", value)
+                    elif operator == ">=":
+                        where_conditions[column] = (">=", value)
+                    elif operator == "<=":
+                        where_conditions[column] = ("<=", value)
+                    elif operator == "!=":
+                        where_conditions[column] = ("!=", value)
+                    elif operator == "LIKE":
+                        where_conditions[column] = ("LIKE", value)
+                    else:
+                        raise AnalysisError(
+                            f"Unsupported operator: {operator}", task_id
+                        )
+
+            if len(converted_operations) == 1:
+                op = converted_operations[0]
+                sql = generator.generate_sql(
+                    column_name=op["column"],
+                    analysis_type=op["analysis_type"],
+                    group_by_columns=group_by,
+                    where_conditions=where_conditions,
+                    sort_by=sort_by,
+                    limit=limit,
                 )
             else:
-                raise AnalysisError(f"Unsupported operation: {operation}", task_id)
+                if len(set(op["column"] for op in converted_operations)) == 1:
+                    select_parts = []
+                    for op in converted_operations:
+                        select_clause = generator._build_select_clause(
+                            op["column"], op["analysis_type"]
+                        )
+                        select_parts.append(select_clause.replace("SELECT ", ""))
 
-        sql = f"SELECT {', '.join(select_parts)} FROM {table_name}"
+                    if group_by:
+                        group_by_select = ", ".join(group_by)
+                        select_clause = (
+                            f"SELECT {group_by_select}, {', '.join(select_parts)}"
+                        )
+                    else:
+                        select_clause = f"SELECT {', '.join(select_parts)}"
 
-        if filters:
-            where_conditions = []
-            for f in filters:
-                column = f["column"]
-                operator = f["operator"]
-                value = f["value"]
+                    from_clause = f"FROM {table_name}"
+                    where_clause = generator._build_where_clause(where_conditions)
+                    group_by_clause = generator._build_group_by_clause(group_by)
+                    order_by_clause = generator._build_custom_order_by_clause(sort_by)
 
-                if operator == "=":
-                    where_conditions.append(f"{column} = '{value}'")
-                elif operator == "BETWEEN":
-                    where_conditions.append(
-                        f"{column} BETWEEN '{value[0]}' AND '{value[1]}'"
-                    )
-                elif operator == ">":
-                    where_conditions.append(f"{column} > {value}")
-                elif operator == "<":
-                    where_conditions.append(f"{column} < {value}")
+                    sql_parts = [select_clause, from_clause]
+                    if where_clause:
+                        sql_parts.append(where_clause)
+                    if group_by_clause:
+                        sql_parts.append(group_by_clause)
+                    if order_by_clause:
+                        sql_parts.append(order_by_clause)
+
+                    sql = " ".join(sql_parts)
                 else:
-                    raise AnalysisError(f"Unsupported operator: {operator}", task_id)
+                    select_parts = []
+                    for op in converted_operations:
+                        select_clause = generator._build_select_clause(
+                            op["column"], op["analysis_type"]
+                        )
+                        select_parts.append(select_clause.replace("SELECT ", ""))
 
-            if where_conditions:
-                sql += f" WHERE {' AND '.join(where_conditions)}"
+                    if group_by:
+                        group_by_select = ", ".join(group_by)
+                        select_clause = (
+                            f"SELECT {group_by_select}, {', '.join(select_parts)}"
+                        )
+                    else:
+                        select_clause = f"SELECT {', '.join(select_parts)}"
 
-        try:
+                    from_clause = f"FROM {table_name}"
+                    where_clause = generator._build_where_clause(where_conditions)
+                    group_by_clause = generator._build_group_by_clause(group_by)
+                    order_by_clause = generator._build_custom_order_by_clause(sort_by)
+
+                    sql_parts = [select_clause, from_clause]
+                    if where_clause:
+                        sql_parts.append(where_clause)
+                    if group_by_clause:
+                        sql_parts.append(group_by_clause)
+                    if order_by_clause:
+                        sql_parts.append(order_by_clause)
+
+                    sql = " ".join(sql_parts)
+
+            logger.info(f"[Service] 生成的SQL: {sql}")
+
             result_df = con.execute(sql).df()
             columns = result_df.columns.tolist()
             rows = result_df.values.tolist()
 
+            logger.info(
+                f"[Service] 分析执行成功: 列数={len(columns)}, 行数={len(rows)}"
+            )
             return {"columns": columns, "rows": rows, "sql_preview": sql}
+
         except Exception as e:
-            raise SQLExecutionError(f"SQL execution failed: {str(e)}", sql)
+            logger.error(f"[Service] SQL执行失败: {str(e)}")
+            raise SQLExecutionError(f"SQL execution failed: {str(e)}", "")
 
     def execute_custom_query(self, task_id: str, sql: str) -> Dict[str, Any]:
         """执行自定义SQL查询"""

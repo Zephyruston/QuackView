@@ -17,19 +17,18 @@ interface AnalysisResultProps {
 }
 
 export default function AnalysisResult(
-  { result, taskId, onReset }: AnalysisResultProps,
+  { result, taskId: _taskId, onReset }: AnalysisResultProps,
 ) {
   const isExporting = useSignal(false);
   const error = useSignal<string | null>(null);
   const success = useSignal<string | null>(null);
 
-  const exportSql = async () => {
+  const exportSql = () => {
     try {
       isExporting.value = true;
       error.value = null;
       success.value = null;
-
-      const blob = await apiClient.exportSql(taskId);
+      const blob = new Blob([result.sql_preview], { type: "text/sql" });
       const url = globalThis.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -38,7 +37,6 @@ export default function AnalysisResult(
       a.click();
       globalThis.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
       success.value = "SQL导出成功！";
     } catch (err) {
       error.value = err instanceof Error ? err.message : "导出过程中发生错误";
@@ -52,8 +50,10 @@ export default function AnalysisResult(
       isExporting.value = true;
       error.value = null;
       success.value = null;
-
-      const blob = await apiClient.exportExcel(taskId);
+      const blob = await apiClient.exportResultExcel(
+        result.columns,
+        result.rows,
+      );
       const url = globalThis.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -62,7 +62,6 @@ export default function AnalysisResult(
       a.click();
       globalThis.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
       success.value = "Excel导出成功！";
     } catch (err) {
       error.value = err instanceof Error ? err.message : "导出过程中发生错误";

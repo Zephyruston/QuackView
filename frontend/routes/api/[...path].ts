@@ -109,6 +109,17 @@ export const handler: Handlers = {
         body: JSON.stringify(body),
       });
 
+      const contentType = response.headers.get("content-type") || "";
+      if (
+        contentType.includes("application/octet-stream") ||
+        contentType.includes("application/vnd.openxmlformats")
+      ) {
+        const blob = await response.blob();
+        return new Response(blob, {
+          status: response.status,
+          headers: response.headers,
+        });
+      }
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`后端API错误 (${path}):`, errorText);
@@ -117,7 +128,6 @@ export const handler: Handlers = {
           { status: response.status },
         );
       }
-
       const data = await response.json();
       return Response.json(data, {
         status: response.status,
