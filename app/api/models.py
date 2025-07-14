@@ -24,10 +24,18 @@ class FilterCondition(BaseModel):
     value: Union[str, int, float, List[Any]]
 
 
+class SortByCondition(BaseModel):
+    field: str
+    order: str
+
+
 class AnalysisRequest(BaseModel):
     task_id: str
     operations: List[AnalysisOperation]
     filters: Optional[List[FilterCondition]] = None
+    group_by: Optional[List[str]] = None
+    sort_by: Optional[List[SortByCondition]] = None
+    limit: Optional[int] = None
 
 
 class AnalysisResult(BaseModel):

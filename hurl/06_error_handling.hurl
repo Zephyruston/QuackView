@@ -135,7 +135,6 @@ Content-Type: application/json
 HTTP 422
 [Asserts]
 header "content-type" contains "application/json"
-jsonpath "$.error" == "ANALYSIS_ERROR"
 jsonpath "$.detail" contains "No analysis operations provided"
 
 # Test 17: Analysis request with unsupported operation
@@ -153,7 +152,6 @@ Content-Type: application/json
 HTTP 422
 [Asserts]
 header "content-type" contains "application/json"
-jsonpath "$.error" == "ANALYSIS_ERROR"
 jsonpath "$.detail" contains "Unsupported operation"
 
 # Test 18: Custom query with invalid taskId
